@@ -2,8 +2,8 @@ package pl.a517435708.serverrockpaperscisoris;
 
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.ServerSocket;
@@ -15,7 +15,13 @@ public class Server {
     MainActivity activity;
     ServerSocket serverSocket;
     String message = "";
-    static final int socketServerPORT = 8080;
+
+
+    int player1Set = -1;
+    int player2Set = -1;
+
+    static final int socketServerPORT = 1337;
+    String msgReply;
 
     public Server(MainActivity activity) {
         this.activity = activity;
@@ -38,7 +44,8 @@ public class Server {
         }
     }
 
-    private class SocketServerThread extends Thread {
+    private class SocketServerThread extends Thread
+    {
 
         int count = 0;
 
@@ -53,20 +60,20 @@ public class Server {
                     // Socket object
                     Socket socket = serverSocket.accept();
                     count++;
-                    message += "#" + count + " from "
-                            + socket.getInetAddress() + ":"
-                            + socket.getPort() + "\n";
+
+
+                    message += "Welcome Player nr. " + count + "\n";
 
                     activity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            activity.msg.setText(message);
+                            activity.msg.append(message);
                         }
                     });
 
-                    SocketServerReplyThread socketServerReplyThread =
-                            new SocketServerReplyThread(socket, count);
-                    socketServerReplyThread.run();
+                    SocketServerListenThread socketServerListenThread =
+                            new SocketServerListenThread(socket, count);
+                    socketServerListenThread.start();
 
                 }
             } catch (IOException e) {
@@ -76,12 +83,33 @@ public class Server {
         }
     }
 
-    private class SocketServerReplyThread extends Thread {
+    private class SocketServerListenThread extends Thread {
 
         private Socket hostThreadSocket;
+        int dataSize = 0;
         int cnt;
 
-        SocketServerReplyThread(Socket socket, int c) {
+        private String byteToString(byte[] data, int size)
+        {
+            int number;
+            StringBuilder gener = new StringBuilder();
+
+            for(int i=0; i<size; i++)
+            {
+                while(data[i]>0)
+                {
+                    number = (data[i]&0xff)%10;
+                    gener.append((char)(number+48));
+                    data[i] /= 10;
+                }
+            }
+
+            gener.reverse();
+
+            return gener.toString();
+        }
+
+        SocketServerListenThread(Socket socket, int c) {
             hostThreadSocket = socket;
             cnt = c;
         }
@@ -89,37 +117,157 @@ public class Server {
         @Override
         public void run() {
             OutputStream outputStream;
-            String msgReply = "Hello from Server, you are #" + cnt;
+            InputStream inputStream;
+            msgReply = "";
 
-            try {
-                outputStream = hostThreadSocket.getOutputStream();
-                PrintStream printStream = new PrintStream(outputStream);
-                printStream.print(msgReply);
-                printStream.close();
 
-                message += "replayed: " + msgReply + "\n";
 
-                activity.runOnUiThread(new Runnable() {
+            while (!hostThreadSocket.isClosed())
+            {
+                try {
+                    inputStream = hostThreadSocket.getInputStream();
 
-                    @Override
-                    public void run() {
-                        activity.msg.setText(message);
+
+                    dataSize = inputStream.available();
+                    if (dataSize > 0)
+                    {
+                        byte[] data = new byte[dataSize];
+                        inputStream.read(data,0,dataSize);
+
+                        if(cnt == 1)
+                            player1Set = data[0];
+                        if(cnt == 2)
+                            player2Set = data[0];
+
+                        msgReply = "Data from player number ["+ cnt + "] : " + byteToString(data,dataSize);
+
+
+
+                        activity.runOnUiThread(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                activity.msg.append(msgReply + '\n');
+                            }
+                        });
+
+                        if(player2Set != -1 && player1Set != -1)
+                        {
+
+                            activity.runOnUiThread(new Runnable()
+                            {
+                                @Override
+                                public void run()
+                                {
+                                    activity.msg.append("Calculate result:" + '\n');
+                                }
+                            });
+
+                            player1Set -= 16;
+                            player2Set -= 16;
+
+                            if(player1Set == 7)
+                            {
+                                switch (player2Set)
+                                {
+
+                                    case 1:
+                                    {
+                                        message = "Gracz 1 Wygrywa!";
+                                    }break;
+
+                                    case 7:
+                                    {
+                                        message = "Remis!";
+                                    }break;
+
+                                    case 0:
+                                    {
+                                        message = "Gracz 2 Wygrywa!";
+                                    }break;
+                                }
+                            }
+                            if(player1Set == 0)
+                            {
+                                switch (player2Set)
+                                {
+
+                                    case 1:
+                                    {
+                                        message = "Gracz 2 Wygrywa!";
+                                    }break;
+
+                                    case 7:
+                                    {
+                                        message = "Gracz 1 Wygrywa!";
+                                    }break;
+
+                                    case 0:
+                                    {
+                                        message = "Remis!";
+                                    }break;
+                                }
+                            }
+
+                            if(player1Set == 1)
+                            {
+                                switch (player2Set)
+                                {
+
+                                    case 1:
+                                    {
+                                        message = "Remis!";
+                                    }break;
+
+                                    case 7:
+                                    {
+                                        message = "Gracz 2 Wygrywa!";
+                                    }break;
+
+                                    case 0:
+                                    {
+                                        message = "Gracz 1 Wygrywa!";
+                                    }break;
+                                }
+                            }
+
+                            player2Set = -1;
+                            player1Set = -1;
+
+
+                            activity.runOnUiThread(new Runnable()
+                            {
+                                @Override
+                                public void run()
+                                {
+                                    activity.msg.append(message + '\n');
+                                }
+                            });
+
+                        }
+
                     }
-                });
 
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-                message += "Something wrong! " + e.toString() + "\n";
+
+
+                }catch (Exception ex)
+                {
+
+                }
             }
 
-            activity.runOnUiThread(new Runnable() {
 
+            activity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    activity.msg.setText(message);
+                    activity.msg.setText("AAAAAAND DEAD!!!");
                 }
             });
+
+
+
+
         }
 
     }
@@ -136,7 +284,6 @@ public class Server {
                         .getInetAddresses();
                 while (enumInetAddress.hasMoreElements())
                 {
-                    ip += "While Test\n";
                     InetAddress inetAddress = enumInetAddress
                             .nextElement();
 

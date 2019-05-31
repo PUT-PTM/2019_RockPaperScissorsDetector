@@ -41,23 +41,33 @@
 #include "stm32f4xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "lis3dsh.h"
 #include <string.h>
+#include <stdlib.h>
 
 #define littleFinger 0x1
 #define cordialFinger 0x2
 #define middleFinger 0x4
 #define pointFinger 0x8
 
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi1;
+
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+
+float accX, accY, accZ, out[4];
+float gravityAcc = 0;
+
+int hold = 0;
+int startShaking = 0;
 
 uint8_t* sendUART;
 uint16_t sizeSendUART;
@@ -81,6 +91,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_SPI1_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -147,14 +158,23 @@ inline void prepareToSendData()
 	send();
 }
 
+void sendSpecial(uint8_t* sender)
+{
+	sizeSendUART = returnSizeSemiColonGuardianNeeded(sender);
+	HAL_UART_Transmit_IT(&huart3,sender,sizeSendUART);
+}
+
 inline void sendData()
 {
-	uint8_t bufferData[2];
-	bufferData[0] = dataOfHowManyFingersAreClosed;
-	bufferData[1] = ';';
-	memcpy(sendUART,bufferData,2);
-	send();
+
+	uint8_t* sender = (uint8_t*)malloc(2*sizeof(uint8_t));
+	*sender = dataOfHowManyFingersAreClosed;
+	*(sender + 1) = 59;
+	sendSpecial(sender);
+	free(sender);
 }
+
+
 
 void setDiodeNr0()
 {
@@ -289,30 +309,28 @@ void setDiodeNr15()
 	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
 }
 
-
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void call()
 {
 
 	if(state == 4)
 	{
-		dataOfHowManyFingersAreClosed = 0;
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_SET)
+		dataOfHowManyFingersAreClosed = 0x10;
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_SET)
 		{
 			dataOfHowManyFingersAreClosed += littleFinger;
 		}
 
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == GPIO_PIN_SET)
 		{
 			dataOfHowManyFingersAreClosed += cordialFinger;
 		}
 
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
 		{
 			dataOfHowManyFingersAreClosed += middleFinger;
 		}
 
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_SET)
 		{
 			dataOfHowManyFingersAreClosed += pointFinger;
 		}
@@ -320,10 +338,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		prepareToSendData();
 		setDiodeNr6();
 		state = 5;
+
 	}
-
-
 }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+
+	call();
+}
+
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -331,12 +355,42 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
        if(htim->Instance == TIM3)
        {
 
+
+
+    	   if(state == 5)
+    	   {
+				sendData();
+				state = 6;
+				setDiodeNr8();
+    	   }
     	   if(state == 4)
     	   {
+    		   float accState = accX+accY+accZ;
+
+
+    		   if(!startShaking)
+				   if(accState < gravityAcc*0.7 || accState > gravityAcc*1.3)
+				   {
+					   startShaking = 1;
+					   setDiodeNr10();
+				   }
+
+    		   if(startShaking)
+    		   {
+				   if(accState < gravityAcc*1.3 && accState > gravityAcc*0.7)
+				   {
+					   hold++;
+				   }
+
+				   if(hold > 20)
+				   {
+					   setDiodeNr12();
+					   call();
+				   }
+    		   }
     		   //Tutaj bêdzie sprawdzane ruszanie rêk¹ i jego brak
     	   }
-
-    	   if(wait == bufor_wait && state != 4)
+    	   if(wait == bufor_wait && state < 4)
     	   {
     		   bufor_wait = 0;
     		   bufor_reload++;
@@ -368,6 +422,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 						case 1:
 						{
+							gravityAcc = accX + accY + accZ;
 							setMode();
 							setDiodeNr2();
 						}break;
@@ -388,14 +443,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 						{
 							setDiodeNr5();
 						}break;
-
-						case 5:
-						{
-							sendData();
-							state = 4;
-							setDiodeNr5();
-						}break;
-
 
 					}
     		   }
@@ -451,8 +498,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART3_UART_Init();
   MX_TIM3_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
+  LISInit();
 
   HAL_UART_IRQHandler(&huart3);
   HAL_TIM_Base_Start_IT(&htim3);
@@ -466,56 +515,15 @@ int main(void)
   while (1)
   {
 
+
+	  LIS3DSH_ReadACC(out);
+	  accX = out[0];
+	  accY = out[1];
+	  accZ = out[2];
+
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-	  // HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
-
-
-
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_SET)
-		{
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
-		}else
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
-		}
-
-
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_SET)
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
-		}else
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
-		}
-
-
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == GPIO_PIN_SET)
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-		}else
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-		}
-
-
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == GPIO_PIN_SET)
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
-		}else
-		{
-
-			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
-		}
-
-
 
   }
   /* USER CODE END 3 */
@@ -577,6 +585,30 @@ void SystemClock_Config(void)
 
   /* SysTick_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
+}
+
+/* SPI1 init function */
+static void MX_SPI1_Init(void)
+{
+
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
 }
 
 /* TIM3 init function */
@@ -643,19 +675,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct;
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PC0 PC1 PC2 PC3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  /*Configure GPIO pin : PE3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;
@@ -669,6 +707,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PD5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB3 PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);

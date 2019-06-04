@@ -51,6 +51,11 @@
 #define pointFinger 0x8
 
 
+#define debug_play 0x1
+#define debug_display 0x2
+#define debug_play_again 0x3
+#define debug_display_accept 0x4
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -68,6 +73,10 @@ float gravityAcc = 0;
 
 int hold = 0;
 int startShaking = 0;
+
+int debugModeSet = 0;
+int debugModeState = 0;
+int debug_counter = 0;
 
 uint8_t* sendUART;
 uint16_t sizeSendUART;
@@ -315,22 +324,18 @@ void call()
 	if(state == 4)
 	{
 		dataOfHowManyFingersAreClosed = 0x10;
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_SET)
-		{
-			dataOfHowManyFingersAreClosed += littleFinger;
-		}
 
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_5) == GPIO_PIN_RESET)
 		{
 			dataOfHowManyFingersAreClosed += cordialFinger;
 		}
 
-		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_RESET)
 		{
 			dataOfHowManyFingersAreClosed += middleFinger;
 		}
 
-		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_RESET)
 		{
 			dataOfHowManyFingersAreClosed += pointFinger;
 		}
@@ -344,115 +349,189 @@ void call()
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+	debugModeState++;
 
-	call();
+	switch(debugModeState)
+	{
+		case debug_play:
+		{
+			setDiodeNr1();
+		}break;
+
+		case debug_display:
+		{
+			setDiodeNr2();
+		}break;
+
+
+		case debug_play_again:
+		{
+			setDiodeNr4();
+		}break;
+
+		default:
+		{
+			debugModeState = debug_play;
+			setDiodeNr1();
+		}break;
+
+	}
+
+	//call();
+	debugModeSet = 1;
+
+	debug_counter = 0;
+
 }
 
 
+inline void callBack()
+{
+	   	   	   if(state == 5)
+	    	   {
+					sendData();
+					state = 6;
+					setDiodeNr8();
+	    	   }
+	    	   if(state == 4)
+	    	   {
+	    		   float accState = sqrt(accX*accX + accY*accY + accZ*accZ);
+
+	    		   if(!startShaking)
+					   if(accState > gravityAcc*1.8)
+					   {
+						   startShaking = 1;
+						   setDiodeNr10();
+					   }
+
+	    		   if(startShaking)
+	    		   {
+					   if(accState < gravityAcc*1.3 && accState > gravityAcc*0.6)
+					   {
+						   hold++;
+					   }
+
+					   if(hold > 20)
+					   {
+						   setDiodeNr12();
+						   call();
+					   }
+	    		   }
+	    		   //Tutaj bêdzie sprawdzane ruszanie rêk¹ i jego brak
+	    	   }
+	    	   if(wait == bufor_wait && state < 4)
+	    	   {
+	    		   bufor_wait = 0;
+	    		   bufor_reload++;
+	    		   if(strstr(receiveUART,"OK") != NULL)
+	        	   {
+	    			   memset(receiveUART,0,sizeReceiveUART);
+	        		   state++;
+	        		   force = 1;
+
+	    			   pos = 0;
+	        	   }else if((strstr(receiveUART,"ERROR") || strstr(receiveUART,"FAIL")) && state != 5)
+	    		   {
+	    			   memset(receiveUART,0,sizeReceiveUART);
+	        		   pos = 0;
+	        		   force = 1;
+	    		   }
+
+	    		   if(force || bufor_reload == 2)
+	    		   {
+	    			   force = 0;
+	    			   bufor_reload = 0;
+						switch(state)
+						{
+							case 0:
+							{
+								test();
+								setDiodeNr1();
+							}break;
+
+							case 1:
+							{
+								gravityAcc = sqrt(accX*accX + accY*accY + accZ*accZ);
+								setMode();
+								setDiodeNr2();
+							}break;
+
+							case 2:
+							{
+								connectToWiFi();
+								setDiodeNr3();
+							}break;
+
+							case 3:
+							{
+								connectToServer();
+								setDiodeNr4();
+							}break;
+
+							case 4:
+							{
+								setDiodeNr5();
+							}break;
+
+						}
+	    		   }
+
+
+	    	   }else
+	    	   {
+	    		   bufor_wait++;
+	    	   }
+
+}
+
+
+inline void debug_callBack()
+{
+	switch(debugModeState)
+	{
+		case debug_play:
+		{
+			debugModeSet = 0;
+			state = 0;
+		}break;
+
+		case debug_display:
+		{
+			debugModeState = debug_display_accept;
+		} break;
+
+		case debug_play_again:
+		{
+			debugModeSet = 0;
+			state = 4;
+		} break;
+
+		default:
+		{
+			debugModeSet = 0;
+			state = 0;
+		} break;
+
+	}
+}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
        if(htim->Instance == TIM3)
        {
 
-
-
-    	   if(state == 5)
+    	   if(debugModeSet == 0)
     	   {
-				sendData();
-				state = 6;
-				setDiodeNr8();
-    	   }
-    	   if(state == 4)
-    	   {
-    		   float accState = accX+accY+accZ;
-
-
-    		   if(!startShaking)
-				   if(accState < gravityAcc*0.7 || accState > gravityAcc*1.3)
-				   {
-					   startShaking = 1;
-					   setDiodeNr10();
-				   }
-
-    		   if(startShaking)
-    		   {
-				   if(accState < gravityAcc*1.3 && accState > gravityAcc*0.7)
-				   {
-					   hold++;
-				   }
-
-				   if(hold > 20)
-				   {
-					   setDiodeNr12();
-					   call();
-				   }
-    		   }
-    		   //Tutaj bêdzie sprawdzane ruszanie rêk¹ i jego brak
-    	   }
-    	   if(wait == bufor_wait && state < 4)
-    	   {
-    		   bufor_wait = 0;
-    		   bufor_reload++;
-    		   if(strstr(receiveUART,"OK") != NULL)
-        	   {
-    			   memset(receiveUART,0,sizeReceiveUART);
-        		   state++;
-        		   force = 1;
-
-    			   pos = 0;
-        	   }else if((strstr(receiveUART,"ERROR") || strstr(receiveUART,"FAIL")) && state != 5)
-    		   {
-    			   memset(receiveUART,0,sizeReceiveUART);
-        		   pos = 0;
-        		   force = 1;
-    		   }
-
-    		   if(force || bufor_reload == 2)
-    		   {
-    			   force = 0;
-    			   bufor_reload = 0;
-					switch(state)
-					{
-						case 0:
-						{
-							test();
-							setDiodeNr1();
-						}break;
-
-						case 1:
-						{
-							gravityAcc = accX + accY + accZ;
-							setMode();
-							setDiodeNr2();
-						}break;
-
-						case 2:
-						{
-							connectToWiFi();
-							setDiodeNr3();
-						}break;
-
-						case 3:
-						{
-							connectToServer();
-							setDiodeNr4();
-						}break;
-
-						case 4:
-						{
-							setDiodeNr5();
-						}break;
-
-					}
-    		   }
-
-
+    		   callBack();
     	   }else
     	   {
-    		   bufor_wait++;
+    		   debug_counter++;
     	   }
 
+    	   if(debug_counter == 20)
+    	   {
+    		   debug_callBack();
+    	   }
 
     	   //kod do wykonania w momencie przepelnienia timera
        }
@@ -521,6 +600,22 @@ int main(void)
 	  accY = out[1];
 	  accZ = out[2];
 
+	  if(debugModeState == debug_display_accept)
+	  {
+			if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_5) == GPIO_PIN_RESET)
+			{
+				setDiodeNr2();
+			}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_RESET)
+			{
+				setDiodeNr4();
+			}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_RESET)
+			{
+				setDiodeNr8();
+			} else
+			{
+				setDiodeNr1();
+			}
+	  }
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */

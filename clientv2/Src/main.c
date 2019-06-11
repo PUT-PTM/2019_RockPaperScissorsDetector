@@ -392,6 +392,9 @@ inline void callBack()
 					sendData();
 					state = 6;
 					setDiodeNr8();
+					bufor_wait = 0;
+					startShaking = 0;
+					hold = 0;
 	    	   }
 	    	   if(state == 4)
 	    	   {
@@ -419,7 +422,11 @@ inline void callBack()
 	    		   }
 	    		   //Tutaj bêdzie sprawdzane ruszanie rêk¹ i jego brak
 	    	   }
-	    	   if(wait == bufor_wait && state < 4)
+	    	   if(state == 6 && bufor_wait >= wait) {
+	    		   state = 4;
+	    		   setDiodeNr5();
+	    	   }
+	    	   if(bufor_wait >= wait && state < 4)
 	    	   {
 	    		   bufor_wait = 0;
 	    		   bufor_reload++;
@@ -504,6 +511,8 @@ inline void debug_callBack()
 		{
 			debugModeSet = 0;
 			state = 4;
+			startShaking = 0;
+			hold = 0;
 		} break;
 
 		default:

@@ -20,6 +20,9 @@ public class Server {
     int player1Set = -1;
     int player2Set = -1;
 
+    int player1Wins = 0;
+    int player2Wins = 0;
+
     static final int socketServerPORT = 1337;
     String msgReply;
 
@@ -62,7 +65,7 @@ public class Server {
                     count++;
 
 
-                    message += "Welcome Player nr. " + count + "\n";
+                    message = "Welcome Player nr. " + count + "\n";
 
                     activity.runOnUiThread(new Runnable() {
                         @Override
@@ -139,7 +142,17 @@ public class Server {
                         if(cnt == 2)
                             player2Set = data[0];
 
-                        msgReply = "Data from player number ["+ cnt + "] : " + byteToString(data,dataSize);
+                        String name = "Not Valid.";
+
+                        if(data[0] == 16)
+                            name = "Paper";
+                        else if(data[0] == 24)
+                            name = "Scis";
+                        else if(data[0] == 30)
+                            name = "Rock";
+
+
+                        msgReply = "Data from player number ["+ cnt + "] : " + byteToString(data,dataSize) + " name = " + name;
 
 
 
@@ -164,70 +177,74 @@ public class Server {
                                 }
                             });
 
-                            player1Set -= 16;
-                            player2Set -= 16;
 
-                            if(player1Set == 7)
+                            if(player1Set == 30)
                             {
                                 switch (player2Set)
                                 {
 
-                                    case 1:
+                                    case 24:
                                     {
-                                        message = "Gracz 1 Wygrywa!";
+                                        player1Wins++;
+                                        message = "Gracz 1 Wygrywa! Po raz: " + player1Wins;
                                     }break;
 
-                                    case 7:
+                                    case 30:
                                     {
                                         message = "Remis!";
                                     }break;
 
-                                    case 0:
+                                    case 16:
                                     {
-                                        message = "Gracz 2 Wygrywa!";
+                                        player2Wins++;
+                                        message = "Gracz 2 Wygrywa! Po raz: " + player2Wins;
                                     }break;
                                 }
                             }
-                            if(player1Set == 0)
+                            if(player1Set == 16)
                             {
                                 switch (player2Set)
                                 {
 
-                                    case 1:
+                                    case 24:
                                     {
-                                        message = "Gracz 2 Wygrywa!";
+                                        player2Wins++;
+                                        message = "Gracz 2 Wygrywa! Po raz: " + player2Wins;
                                     }break;
 
-                                    case 7:
+                                    case 30:
                                     {
-                                        message = "Gracz 1 Wygrywa!";
+                                        player1Wins++;
+                                        message = "Gracz 1 Wygrywa! Po raz: " + player1Wins;
                                     }break;
 
-                                    case 0:
+                                    case 16:
                                     {
                                         message = "Remis!";
                                     }break;
                                 }
                             }
 
-                            if(player1Set == 1)
+                            if(player1Set == 24)
                             {
                                 switch (player2Set)
                                 {
 
-                                    case 1:
+                                    case 24:
                                     {
                                         message = "Remis!";
                                     }break;
 
-                                    case 7:
+                                    case 30:
                                     {
-                                        message = "Gracz 2 Wygrywa!";
+                                        player2Wins++;
+                                        message = "Gracz 2 Wygrywa! : " + player2Wins;
                                     }break;
 
-                                    case 0:
+                                    case 16:
                                     {
-                                        message = "Gracz 1 Wygrywa!";
+                                        player1Wins++;
+                                        message = "Gracz 1 Wygrywa! : " + player1Wins;
                                     }break;
                                 }
                             }
@@ -270,6 +287,14 @@ public class Server {
 
         }
 
+    }
+
+    public void restart() {
+        player1Set = -1;
+        player2Set = -1;
+
+        player1Wins = 0;
+        player2Wins = 0;
     }
 
     public String getIpAddress() {

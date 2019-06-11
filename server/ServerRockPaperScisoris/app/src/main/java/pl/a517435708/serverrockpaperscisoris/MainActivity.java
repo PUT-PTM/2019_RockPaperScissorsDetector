@@ -1,6 +1,7 @@
 package pl.a517435708.serverrockpaperscisoris;
 import android.os.Bundle;
 import android.app.Activity;
+import android.view.View;
 import android.widget.TextView;
 
 public class MainActivity extends Activity
@@ -17,6 +18,10 @@ public class MainActivity extends Activity
         msg = (TextView) findViewById(R.id.msg);
         server = new Server(this);
         infoip.setText(server.getIpAddress() + ":" + server.getPort());
+    }
+
+    public void buttonOnClick(View v){
+        server.restart();
     }
 
     @Override

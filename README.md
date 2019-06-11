@@ -1,22 +1,22 @@
 # 2019_RockPaperScissorsDetector
 
-##Overview
+## Overview
 ````
 Arbiter (server) and client to play game: "Rock Paper Scissorss".
 ````
-##Description
+## Description
 ```
 The project conttains two apps, server written in Android Studio for your mobal device, and client written in C for your STM32 microcontroller.
 ESP8266 is used to communicate between client and server via WiFi. 
 ```
 
-##Tools
+## Tools
 ```
 Android Studio v3.4.1 
 CubeMX v4.27.0
 Eclipse 
 ```
-##How to run 
+## How to run 
 ```
 RELEASE version: 1.0
 
@@ -29,11 +29,10 @@ RELEASE version: 1.0
 
 ```
 
-##How to compile
+## How to compile
 All settings above should enable to clone and free run this code on your devices.
 
- - czy niezbędne jest podjęcie jakiś specjalnych kroków, czy wystarczy skopiować?
-##Future improvements
+## Future improvements
 ```
 Make a two-way communication.
 When one of the players make undefined move make him lose.
@@ -41,16 +40,16 @@ Settings [...] graph (graph below) can be accelerated.
 ```
 
 
-## Settings and game graph
+### Settings and game graph
 ![Client States](https://i.imgur.com/LdbJaib.png)
 
-##Attributions
+## Attributions
 
 ```
 Server code is copied from: http://androidsrc.net/android-client-server-using-sockets-server-implementation/ and modified to meet our requirements.
 ```
 
-##License
+## License
 
 ```
 MIT
